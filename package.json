@@ -1,0 +1,12 @@
+{
+  "name": "glitchcon-team09-workspace",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "npx concurrently \"npm:dev --prefix backend1\" \"npm:dev --prefix v0-hackathon-development-order\"",
+    "install-all": "npm install --prefix backend1 && npm install --prefix v0-hackathon-development-order"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}

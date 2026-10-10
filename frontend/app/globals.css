@@ -1,0 +1,143 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --background: oklch(0.985 0 0);
+  --foreground: oklch(0.18 0 0);
+
+  --card: oklch(1 0 0 / 0.98);
+  --card-foreground: oklch(0.18 0 0);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0 0);
+
+  --primary: oklch(0.2 0 0);
+  --primary-foreground: oklch(0.98 0 0);
+
+  --secondary: oklch(0.94 0 0);
+  --secondary-foreground: oklch(0.2 0 0);
+
+  --muted: oklch(0.95 0 0);
+  --muted-foreground: oklch(0.45 0 0);
+
+  --accent: oklch(0.9 0 0);
+  --accent-foreground: oklch(0.2 0 0);
+
+  --border: oklch(0.88 0 0);
+  --input: oklch(0.95 0 0);
+  --ring: oklch(0.2 0 0);
+
+  --sidebar: oklch(1 0 0 / 0.95);
+  --sidebar-foreground: oklch(0.18 0 0);
+
+  --radius: 0.85rem;
+}
+
+.dark {
+  --background: oklch(0.12 0 0);
+  --foreground: oklch(0.95 0 0);
+
+  --card: oklch(0.16 0 0 / 0.95);
+  --card-foreground: oklch(0.95 0 0);
+
+  --popover: oklch(0.15 0 0);
+  --popover-foreground: oklch(0.95 0 0);
+
+  --primary: oklch(0.95 0 0);
+  --primary-foreground: oklch(0.12 0 0);
+
+  --secondary: oklch(0.24 0 0);
+  --secondary-foreground: oklch(0.95 0 0);
+
+  --muted: oklch(0.2 0 0);
+  --muted-foreground: oklch(0.7 0 0);
+
+  --accent: oklch(0.3 0 0);
+  --accent-foreground: oklch(0.95 0 0);
+
+  --border: oklch(0.28 0 0);
+  --input: oklch(0.2 0 0);
+  --ring: oklch(0.95 0 0);
+
+  --sidebar: oklch(0.14 0 0 / 0.95);
+  --sidebar-foreground: oklch(0.95 0 0);
+}
+
+@theme inline {
+  --font-sans: 'Geist', 'Geist Fallback';
+  --font-mono: 'Geist Mono', 'Geist Mono Fallback';
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+
+    background-image:
+      radial-gradient(circle at 0% -10%, rgba(0,0,0,0.08), transparent 36%),
+      radial-gradient(circle at 100% 0%, rgba(0,0,0,0.06), transparent 30%);
+
+    background-attachment: fixed;
+  }
+
+}
+
+/* Sidebar text fix */
+
+.sidebar {
+  color: var(--sidebar-foreground);
+}
+
+/* Utility fixes */
+
+@layer utilities {
+
+  .text-muted-foreground {
+    color: var(--muted-foreground) !important;
+  }
+
+  .text-card-foreground {
+    color: var(--card-foreground);
+  }
+
+  .text-sidebar-foreground {
+    color: var(--sidebar-foreground);
+  }
+
+}
