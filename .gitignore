@@ -1,0 +1,8 @@
+.env
+.env*
+!.env.example
+node_modules/
+.next/
+uploads/
+backend1/uploads/
+backend1/data/vectra_index/

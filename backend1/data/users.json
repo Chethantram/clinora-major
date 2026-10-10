@@ -4,7 +4,7 @@
       "id": "D001",
       "name": "Dr. Nandakumar",
       "email": "nandakumar@kathir.in",
-      "password": "doctor123",
+      "password": "demo-password-change-me",
       "department": "General Medicine & Diabetology",
       "specialisation": "Diabetology",
       "patients": [
@@ -15,7 +15,7 @@
       "id": "D002",
       "name": "Dr. Sharmila Ganesan",
       "email": "sharmila@kathir.in",
-      "password": "doctor123",
+      "password": "demo-password-change-me",
       "department": "Obstetrics & Gynaecology",
       "specialisation": "OB/GYN",
       "patients": [
@@ -26,7 +26,7 @@
       "id": "D003",
       "name": "Dr. Mugil",
       "email": "mugil@kathir.in",
-      "password": "doctor123",
+      "password": "demo-password-change-me",
       "department": "Cardiology",
       "specialisation": "Cardiology",
       "patients": [
@@ -37,7 +37,7 @@
       "id": "D004",
       "name": "Dr. Jenson Isaac",
       "email": "jenson@kathir.in",
-      "password": "doctor123",
+      "password": "demo-password-change-me",
       "department": "Spine & Orthopaedics",
       "specialisation": "Orthopaedics",
       "patients": []
@@ -46,13 +46,13 @@
       "id": "D005",
       "name": "Dr.NandhanKumar",
       "email": "dr.nandakumar@kathir.in",
-      "password": "doctor123"
+      "password": "demo-password-change-me"
     },
     {
       "id": "D006",
       "name": "test",
       "email": "test1@gmail.com",
-      "password": "ChethanT@123"
+      "password": "demo-password-change-me"
     }
   ],
   "patients": [
@@ -60,13 +60,13 @@
       "id": "P001",
       "name": "Rajan Subramaniam",
       "email": "rajan@patient.in",
-      "password": "patient123"
+      "password": "demo-password-change-me"
     },
     {
       "id": "P002",
       "name": "Meenakshi Pillai",
       "email": "meenakshi@patient.in",
-      "password": "patient123"
+      "password": "demo-password-change-me"
     }
   ]
 }
