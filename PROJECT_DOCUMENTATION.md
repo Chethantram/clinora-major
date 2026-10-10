@@ -14,7 +14,7 @@ The platform is built to support:
 
 This repository contains:
 - [backend1](backend1) — Express.js backend with AI agents and MongoDB integration
-- [v0-hackathon-development-order](v0-hackathon-development-order) — Next.js frontend dashboard and patient portal
+- [frontend](frontend) — Next.js frontend dashboard and patient portal
 - [README.md](README.md) — project-level summary and setup guidance
 
 ---
@@ -82,9 +82,9 @@ The backend is designed around a multi-agent architecture, where specialist agen
 - React Hook Form + Zod for form validation
 
 Primary frontend config is in:
-- [v0-hackathon-development-order/package.json](v0-hackathon-development-order/package.json)
-- [v0-hackathon-development-order/app](v0-hackathon-development-order/app)
-- [v0-hackathon-development-order/components](v0-hackathon-development-order/components)
+- [frontend/package.json](frontend/package.json)
+- [frontend/app](frontend/app)
+- [frontend/components](frontend/components)
 
 ### Backend
 - Node.js
@@ -126,10 +126,10 @@ Primary backend config is in:
 - [backend1/scripts](backend1/scripts) — seeding and setup scripts
 
 ### Frontend Structure
-- [v0-hackathon-development-order/app](v0-hackathon-development-order/app) — screens for dashboard, auth, landing, and patient views
-- [v0-hackathon-development-order/components](v0-hackathon-development-order/components) — UI elements and page-specific sections
-- [v0-hackathon-development-order/lib](v0-hackathon-development-order/lib) — API wrappers and support utilities
-- [v0-hackathon-development-order/hooks](v0-hackathon-development-order/hooks) — custom hooks
+- [frontend/app](frontend/app) — screens for dashboard, auth, landing, and patient views
+- [frontend/components](frontend/components) — UI elements and page-specific sections
+- [frontend/lib](frontend/lib) — API wrappers and support utilities
+- [frontend/hooks](frontend/hooks) — custom hooks
 
 ---
 
@@ -331,7 +331,7 @@ Key variables include:
 
 ### Frontend environment
 Defined in:
-- [v0-hackathon-development-order/.env.local.example](v0-hackathon-development-order/.env.local.example)
+- [frontend/.env.local.example](frontend/.env.local.example)
 
 Key variable:
 - NEXT_PUBLIC_BACKEND_URL
@@ -350,7 +350,7 @@ npm run dev
 
 ### Frontend
 ```bash
-cd v0-hackathon-development-order
+cd frontend
 npm install
 cp .env.local.example .env.local
 npm run dev

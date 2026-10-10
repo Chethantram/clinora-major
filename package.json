@@ -3,8 +3,8 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "npx concurrently \"npm:dev --prefix backend1\" \"npm:dev --prefix v0-hackathon-development-order\"",
-    "install-all": "npm install --prefix backend1 && npm install --prefix v0-hackathon-development-order"
+    "dev": "npx concurrently \"npm:dev --prefix backend1\" \"npm:dev --prefix frontend\"",
+    "install-all": "npm install --prefix backend1 && npm install --prefix frontend"
   },
   "devDependencies": {
     "concurrently": "^8.2.0"

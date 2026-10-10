@@ -3,7 +3,7 @@
 This workspace contains multiple projects. The two main development targets are:
 
 - `backend1` — Express-based Node.js backend (port 4000)
-- `v0-hackathon-development-order` — Next.js frontend (port 3000)
+- `frontend` — Next.js frontend (port 3000)
 
 Quick start (local):
 
@@ -21,7 +21,7 @@ npm run dev
 2. Frontend
 
 ```bash
-cd v0-hackathon-development-order
+cd frontend
 cp .env.local.example .env.local
 # adjust NEXT_PUBLIC_BACKEND_URL if your backend runs on a different host
 
