@@ -68,10 +68,10 @@ export function Sidebar() {
 
         <div className="clinical-brand-row">
           <div className="clinical-logo-box">
-            <img src="/app_logo.png" alt="ClinSight AI Logo" className="clinical-logo" />
+            <img src="/app_logo.png" alt="Clinora AI Logo" className="clinical-logo" />
           </div>
           <div className="clinical-brand-copy">
-            <span className="clinical-brand-name">ClinSight AI</span>
+            <span className="clinical-brand-name">Clinora AI</span>
             <span className="clinical-brand-tag">Care intelligence</span>
           </div>
         </div>
