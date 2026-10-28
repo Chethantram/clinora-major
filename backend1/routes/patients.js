@@ -14,6 +14,22 @@ function splitValues(value) {
   return normalized;
 }
 
+function normalizeBodyIssues(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value) || value.length > 8) {
+    throw new Error('Add up to 8 body-map issues');
+  }
+  return value.map((issue) => {
+    const label = String(issue?.label || '').trim();
+    const x = Number(issue?.x);
+    const y = Number(issue?.y);
+    if (!label || label.length > 160 || !Number.isFinite(x) || !Number.isFinite(y) || x < 0 || x > 100 || y < 0 || y > 100) {
+      throw new Error('Each body-map issue needs a description and a valid map location');
+    }
+    return { label, x, y, type: 'monitoring' };
+  });
+}
+
 function normalizePatientInput(body = {}) {
   const name = String(body.name || '').trim();
   const age = body.age === '' || body.age == null ? null : Number(body.age);
@@ -33,6 +49,7 @@ function normalizePatientInput(body = {}) {
 
   const diagnosis = splitValues(body.diagnosis);
   const allergies = splitValues(body.allergies);
+  const bodyIssues = normalizeBodyIssues(body.bodyIssues);
 
   return {
     name,
@@ -43,6 +60,7 @@ function normalizePatientInput(body = {}) {
     blood_group: bloodGroup || null,
     diagnosis,
     allergies,
+    bodyIssues,
   };
 }
 

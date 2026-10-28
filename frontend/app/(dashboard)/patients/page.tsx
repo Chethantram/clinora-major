@@ -38,6 +38,8 @@ type PatientForm = {
   blood_group: string;
   diagnosis: string;
   allergies: string;
+  bodyIssueLabel: string;
+  bodyIssuePoint: { x: number; y: number } | null;
 };
 
 const EMPTY_FORM: PatientForm = {
@@ -49,6 +51,8 @@ const EMPTY_FORM: PatientForm = {
   blood_group: "",
   diagnosis: "",
   allergies: "",
+  bodyIssueLabel: "",
+  bodyIssuePoint: null,
 };
 
 function normalizeStatus(status: string): Exclude<PatientStatus, "all"> {
@@ -60,7 +64,9 @@ function normalizeStatus(status: string): Exclude<PatientStatus, "all"> {
 
 function formatDate(value: string | null) {
   if (!value) return "No visits yet";
-  const date = new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+    : new Date(value);
   if (Number.isNaN(date.getTime())) return "Date unavailable";
   return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
@@ -117,7 +123,19 @@ export default function PatientsPage() {
     try {
       await fetchApi<{ patient: Patient }>("/api/patients", {
         method: "POST",
-        body: JSON.stringify({ ...form, age: form.age || null }),
+        body: JSON.stringify({
+          name: form.name,
+          age: form.age || null,
+          gender: form.gender,
+          email: form.email,
+          phone: form.phone,
+          blood_group: form.blood_group,
+          diagnosis: form.diagnosis,
+          allergies: form.allergies,
+          bodyIssues: form.bodyIssueLabel.trim() && form.bodyIssuePoint
+            ? [{ label: form.bodyIssueLabel.trim(), ...form.bodyIssuePoint }]
+            : [],
+        }),
       });
       setIsAddOpen(false);
       setForm(EMPTY_FORM);
@@ -238,6 +256,47 @@ export default function PatientsPage() {
             <label>Phone<input type="tel" maxLength={32} value={form.phone} onChange={(event) => updateForm("phone", event.target.value)} placeholder="Phone number" /></label>
             <label className="patients-form-wide">Diagnoses<input value={form.diagnosis} onChange={(event) => updateForm("diagnosis", event.target.value)} placeholder="Separate multiple diagnoses with commas" /></label>
             <label className="patients-form-wide">Allergies<input value={form.allergies} onChange={(event) => updateForm("allergies", event.target.value)} placeholder="Separate multiple allergies with commas" /></label>
+            <div className="patients-form-wide patients-body-field">
+              <label htmlFor="patient-body-issue">Body issue <span>(optional)</span></label>
+              <input id="patient-body-issue" maxLength={160} value={form.bodyIssueLabel} onChange={(event) => updateForm("bodyIssueLabel", event.target.value)} placeholder="Describe the issue to mark" />
+              <div
+                className="patients-body-map"
+                role="button"
+                tabIndex={0}
+                aria-label={form.bodyIssuePoint ? `Selected body location at ${Math.round(form.bodyIssuePoint.x)} percent across and ${Math.round(form.bodyIssuePoint.y)} percent down` : "Select an exact body issue location"}
+                onClick={(event) => {
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  const x = Math.max(0, Math.min(100, ((event.clientX - bounds.left) / bounds.width) * 100));
+                  const y = Math.max(0, Math.min(100, ((event.clientY - bounds.top) / bounds.height) * 100));
+                  setForm((current) => ({ ...current, bodyIssuePoint: { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) } }));
+                }}
+                onKeyDown={(event) => {
+                  if (!["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                  event.preventDefault();
+                  setForm((current) => {
+                    const point = current.bodyIssuePoint || { x: 50, y: 50 };
+                    return {
+                      ...current,
+                      bodyIssuePoint: {
+                        x: Math.max(0, Math.min(100, point.x + (event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0))),
+                        y: Math.max(0, Math.min(100, point.y + (event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0))),
+                      },
+                    };
+                  });
+                }}
+              >
+                <svg viewBox="0 0 180 300" aria-hidden="true">
+                  <circle cx="90" cy="28" r="18" />
+                  <rect x="70" y="48" width="40" height="92" rx="18" />
+                  <rect x="48" y="58" width="18" height="76" rx="9" />
+                  <rect x="114" y="58" width="18" height="76" rx="9" />
+                  <rect x="74" y="140" width="15" height="122" rx="8" />
+                  <rect x="91" y="140" width="15" height="122" rx="8" />
+                </svg>
+                {form.bodyIssuePoint && <i style={{ left: `${form.bodyIssuePoint.x}%`, top: `${form.bodyIssuePoint.y}%` }} />}
+              </div>
+              <small>{form.bodyIssuePoint ? "Location selected. Use arrow keys for precise adjustment." : "Select the issue description, then click the exact point on the body map."}</small>
+            </div>
             {formError && <p className="patients-form-error" role="alert">{formError}</p>}
             <DialogFooter className="patients-form-wide">
               <button type="button" className="patients-secondary" onClick={() => setIsAddOpen(false)} disabled={isSaving}>Cancel</button>
@@ -252,7 +311,7 @@ export default function PatientsPage() {
         .patients-heading { display:flex; justify-content:space-between; align-items:flex-end; gap:18px; margin-bottom:23px; }
         .patients-eyebrow { margin:0 0 9px; color:#648080; font-size:9px; font-weight:700; letter-spacing:1px; }.patients-eyebrow span { padding:0 5px; color:#a4b3b0; }
         .patients-heading h1 { margin:0; font:400 31px/1.15 Georgia,serif; }.patients-subtitle { margin:8px 0 0; color:var(--patient-muted); font-size:12px; }
-        .patients-primary,.patients-secondary { display:inline-flex; min-height:38px; align-items:center; justify-content:center; gap:8px; padding:0 13px; border:1px solid var(--patient-green); border-radius:4px; color:#fff; background:var(--patient-green); font:inherit; font-size:11px; font-weight:650; text-decoration:none; cursor:pointer; white-space:nowrap; }.patients-primary:hover { background:#0d655b; }.patients-primary:disabled { opacity:.6; cursor:wait; }
+        .patients-primary,.patients-secondary { display:inline-flex; min-height:38px; align-items:center; justify-content:center; gap:8px; padding:0 13px; border:1px solid var(--patient-green); border-radius:4px; color:#fff; background:var(--patient-green); font:inherit; font-size:11px; font-weight:650; text-decoration:none; cursor:pointer; white-space:nowrap; }.patients-primary { color:#fff !important; background:var(--patient-green) !important; }.patients-primary:hover:not(:disabled) { color:#fff !important; background:#0d655b !important; }.patients-primary:disabled { opacity:.6; cursor:wait; }
         .patients-summary { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); margin-bottom:14px; border:1px solid var(--patient-line); background:#fff; }
         .patients-summary-item { display:flex; width:100%; min-height:82px; align-items:center; gap:12px; padding:15px 18px; border:0; background:#fff; text-align:left; cursor:pointer; }.patients-summary-item + .patients-summary-item { border-left:1px solid var(--patient-line); }.patients-summary-item:hover,.patients-summary-item.selected { background:#f7fbf9; }.patients-summary-icon { display:grid; width:34px; height:34px; flex:0 0 34px; place-items:center; color:#147d70; background:#eaf4f0; }.patients-summary-item.tone-critical .patients-summary-icon { color:#bd654d; background:#fbefeb; }.patients-summary-item.tone-monitoring .patients-summary-icon { color:#a57a38; background:#f7f0df; }.patients-summary-item.tone-stable .patients-summary-icon { color:#537a6c; background:#e8f1ed; }.patients-summary-value { display:block; font:400 22px/1 Georgia,serif; }.patients-summary-label { display:block; margin-top:5px; color:#718487; font-size:10px; }
         .patients-directory { border:1px solid var(--patient-line); background:#fff; }.patients-toolbar { display:flex; min-height:58px; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid var(--patient-line); }.patients-search { display:flex; min-width:190px; max-width:360px; height:36px; flex:1; align-items:center; gap:9px; padding:0 10px; border:1px solid var(--patient-line); color:#78908d; background:#fff; }.patients-search:focus-within { border-color:#147d70; box-shadow:0 0 0 2px rgba(20,125,112,.1); }.patients-search input { width:100%; border:0; outline:0; color:var(--patient-ink); background:transparent; font:inherit; font-size:11px; }.patients-search input::placeholder { color:#96a8a5; }.patients-filter-label { color:#718487; font-size:10px; }.patients-toolbar select { height:36px; padding:0 27px 0 9px; border:1px solid var(--patient-line); border-radius:0; color:#52696c; background:#fff; font:inherit; font-size:10px; }.patients-result-count { margin-left:auto; color:#8a9b99; font-size:10px; white-space:nowrap; }
@@ -262,6 +321,7 @@ export default function PatientsPage() {
         .patients-empty { display:grid; min-height:250px; align-content:center; justify-items:center; padding:30px 20px; text-align:center; }.patients-empty > span { display:grid; width:42px; height:42px; place-items:center; color:#147d70; background:#eaf4f0; }.patients-empty h2 { margin:12px 0 0; font-size:13px; font-weight:650; }.patients-empty p { margin:6px 0 14px; color:#829593; font-size:10px; }.patients-secondary { border-color:var(--patient-line); color:#52696c; background:white; }.patients-secondary:hover { border-color:#9fbab1; color:#147d70; background:#f7fbf9; }
         .patients-error { display:flex; align-items:center; gap:10px; margin:14px; padding:11px 12px; border:1px solid #efd1c8; color:#a84936; background:#fff5f1; font-size:11px; }.patients-error span { flex:1; }.patients-error button { border:0; color:#a84936; background:transparent; font:inherit; font-weight:700; text-decoration:underline; cursor:pointer; }
         .patients-form { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }.patients-form label { display:grid; gap:6px; color:#52696c; font-size:11px; font-weight:650; }.patients-form label b { display:inline; color:#a84936; }.patients-form input,.patients-form select { width:100%; height:38px; padding:0 10px; border:1px solid #dbe6e3; border-radius:3px; color:#15313a; background:#fff; font:inherit; font-size:12px; }.patients-form input:focus,.patients-form select:focus { border-color:#147d70; outline:2px solid rgba(20,125,112,.12); }.patients-form-wide { grid-column:1/-1; }.patients-form-error { grid-column:1/-1; margin:0; color:#a84936; font-size:11px; }.patients-form [data-slot="dialog-footer"] { justify-content:flex-end; }
+        .patients-body-field { display:grid; gap:8px; }.patients-body-field > label { display:block; }.patients-body-field > label span { color:#829593; font-weight:400; }.patients-body-field > small { color:#829593; font-size:10px; }.patients-body-map { position:relative; width:min(100%,150px); height:210px; margin:2px auto; overflow:hidden; border:1px solid var(--patient-line); background:linear-gradient(180deg,#f9fcfa,#eff6f2); cursor:crosshair; touch-action:manipulation; }.patients-body-map:focus-visible { outline:2px solid #147d70; outline-offset:2px; }.patients-body-map svg { position:absolute; inset:0; width:100%; height:100%; }.patients-body-map svg circle,.patients-body-map svg rect { fill:#d7e1ec; stroke:#b8c6d8; }.patients-body-map i { position:absolute; width:12px; height:12px; border:2px solid white; border-radius:50%; background:#bd654d; box-shadow:0 0 0 2px #bd654d; transform:translate(-50%,-50%); pointer-events:none; }
         @media (max-width:760px) { .patients-heading { align-items:flex-start; }.patients-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.patients-summary-item:nth-child(3) { border-left:0; border-top:1px solid var(--patient-line); }.patients-summary-item:nth-child(4) { border-top:1px solid var(--patient-line); }.patients-toolbar { flex-wrap:wrap; }.patients-search { max-width:none; flex-basis:100%; }.patients-result-count { margin-left:0; }.patients-filter-label { margin-left:2px; } }
         @media (max-width:480px) { .patients-heading { flex-direction:column; align-items:stretch; }.patients-heading h1 { font-size:28px; }.patients-primary { min-height:36px; }.patients-summary-item { min-height:72px; padding:12px; }.patients-summary-value { font-size:20px; }.patients-form { grid-template-columns:1fr; }.patients-form-wide { grid-column:auto; } }
       `}</style>

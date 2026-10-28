@@ -36,6 +36,31 @@ function appendLab(patient, testName, entry) {
   patient.labResults[testName].push(entry);
 }
 
+function normalizeLabRows(structuredOCRData) {
+  const rows = Array.isArray(structuredOCRData.lab_results_rows)
+    ? structuredOCRData.lab_results_rows
+    : Object.entries(structuredOCRData.lab_results || {}).flatMap(([test, value]) => {
+      if (test === "BloodPressure" && value && typeof value === "object") {
+        return [{ test, systolic: value.systolic, diastolic: value.diastolic }];
+      }
+      return [{ test, value }];
+    });
+  return rows
+    .map((row) => ({
+      test: String(row?.test || "").trim().slice(0, 120),
+      value: row?.value == null ? null : Number(row.value),
+      unit: String(row?.unit || "").trim().slice(0, 40),
+      normal_range: String(row?.reference_range || row?.normal_range || "").trim().slice(0, 80),
+      status: String(row?.status || "recorded").trim().slice(0, 40),
+      date: String(row?.date || "").trim() || null,
+      systolic: row?.systolic == null ? null : Number(row.systolic),
+      diastolic: row?.diastolic == null ? null : Number(row.diastolic),
+    }))
+    .filter((row) => row.test && (
+      Number.isFinite(row.value) || (row.test.toLowerCase() === "bloodpressure" && Number.isFinite(row.systolic) && Number.isFinite(row.diastolic))
+    ));
+}
+
 function normalizeRecord(patientId, existing) {
   return existing || {
     id: String(patientId),
@@ -99,24 +124,11 @@ async function runIngestionAgent(patientId, structuredOCRData) {
       });
     }
 
-    const labs = structuredOCRData.lab_results || {};
-    if (typeof labs.HbA1c === "number") {
-      appendLab(patient, "HbA1c", { date: now.slice(0, 10), value: labs.HbA1c, source: "OCR_INGESTION" });
-    }
-    if (typeof labs.SerumCreatinine === "number") {
-      appendLab(patient, "SerumCreatinine", { date: now.slice(0, 10), value: labs.SerumCreatinine, source: "OCR_INGESTION" });
-    }
-    if (typeof labs.eGFR === "number") {
-      appendLab(patient, "eGFR", { date: now.slice(0, 10), value: labs.eGFR, source: "OCR_INGESTION" });
-    }
-    if (typeof labs.Haemoglobin === "number") {
-      appendLab(patient, "Haemoglobin", { date: now.slice(0, 10), value: labs.Haemoglobin, source: "OCR_INGESTION" });
-    }
-    if (labs.BloodPressure && typeof labs.BloodPressure.systolic === "number" && typeof labs.BloodPressure.diastolic === "number") {
-      appendLab(patient, "BloodPressure", {
-        date: now.slice(0, 10),
-        systolic: labs.BloodPressure.systolic,
-        diastolic: labs.BloodPressure.diastolic,
+    const labRows = normalizeLabRows(structuredOCRData);
+    for (const row of labRows) {
+      appendLab(patient, row.test, {
+        ...row,
+        date: row.date || now.slice(0, 10),
         source: "OCR_INGESTION",
       });
     }
@@ -172,33 +184,27 @@ async function ingestToMongo(patientId, structuredOCRData) {
     ...bundle.medications.map((medication) => medication.drug),
     ...toArray(structuredOCRData.medications),
   ]);
-  await db.collection("medications").bulkWrite(
-    medications.map((drug) => ({
-      updateOne: {
-        filter: { patient_id: normalizedId, drug },
-        update: { $setOnInsert: { patient_id: normalizedId, drug, active: true, source: "OCR_INGESTION" } },
-        upsert: true,
-      },
-    })),
-    { ordered: false }
-  );
+  if (medications.length) {
+    await db.collection("medications").bulkWrite(
+      medications.map((drug) => ({
+        updateOne: {
+          filter: { patient_id: normalizedId, drug },
+          update: { $setOnInsert: { patient_id: normalizedId, drug, active: true, source: "OCR_INGESTION" } },
+          upsert: true,
+        },
+      })),
+      { ordered: false }
+    );
+  }
 
   const tests = uniqStrings(toArray(structuredOCRData.tests_recommended));
   const symptoms = uniqStrings(toArray(structuredOCRData.symptoms));
-  const labs = structuredOCRData.lab_results || {};
-  const labRows = ["HbA1c", "SerumCreatinine", "eGFR", "Haemoglobin"]
-    .filter((test) => typeof labs[test] === "number")
-    .map((test) => ({ patient_id: normalizedId, test, value: labs[test], date: now.slice(0, 10), source: "OCR_INGESTION" }));
-  if (labs.BloodPressure?.systolic != null && labs.BloodPressure?.diastolic != null) {
-    labRows.push({
-      patient_id: normalizedId,
-      test: "BloodPressure",
-      systolic: labs.BloodPressure.systolic,
-      diastolic: labs.BloodPressure.diastolic,
-      date: now.slice(0, 10),
-      source: "OCR_INGESTION",
-    });
-  }
+  const labRows = normalizeLabRows(structuredOCRData).map((row) => ({
+    ...row,
+    patient_id: normalizedId,
+    date: row.date || now.slice(0, 10),
+    source: "OCR_INGESTION",
+  }));
   if (labRows.length) await db.collection("labs").insertMany(labRows);
   if (symptoms.length) {
     await db.collection("alerts").insertMany(symptoms.map((symptom, index) => ({

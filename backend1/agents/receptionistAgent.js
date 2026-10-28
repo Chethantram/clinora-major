@@ -1,13 +1,13 @@
 const Groq = require('groq-sdk');
 
-const SYSTEM_PROMPT = `You are the AI Receptionist for Kathir Memorial Hospital, Chennai.
+const SYSTEM_PROMPT = `You are the AI Receptionist for Clinora Hospital, Tiptur.
 
 Hospital Details:
-- Name: Kathir Memorial Hospital
-- Address: No. 390, Kelambakkam Main Road, Melakottaiyur, Chennai - 600127
+- Name: Clinora Hospital
+- Address: No. 390, BH Road Tiptur, Tumkur district karnataka - 572201
 - Phone: +91 7695 9595 76
 - Emergency: 108 (national ambulance) OR +91 7695 9595 76
-- Email: kmhemails@gmail.com
+- Email: clinora@gmail.com
 
 Departments:
 - Critical Care & Anaesthesiology

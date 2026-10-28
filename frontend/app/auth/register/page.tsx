@@ -143,13 +143,15 @@ export default function DoctorRegisterPage() {
         <label className="auth-field">
           Doctor registration code
           <input
-            type="password"
+            type="text"
             autoComplete="off"
             required
+            maxLength={160}
             value={registrationCode}
             onChange={(event) => setRegistrationCode(event.target.value)}
-            placeholder="Provided by your administrator"
+            placeholder="Enter your hospital invitation code"
           />
+          <span className="auth-field-hint">Enter the code supplied by your hospital administrator. If you do not have one, contact them before registering.</span>
         </label>
         {error && <p className="auth-error" role="alert">{error}</p>}
         <button className="auth-submit" type="submit" disabled={loading}>

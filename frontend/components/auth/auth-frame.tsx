@@ -72,6 +72,7 @@ export function AuthFrame({
         .auth-description { margin: 10px 0 28px; color: #718487; font-size: 13px; line-height: 1.65; }
         .auth-form { display: grid; gap: 16px; }
         .auth-field { display: grid; gap: 7px; color: #52696c; font-size: 11px; font-weight: 650; }
+        .auth-field-hint { color: #829593; font-size: 10px; font-weight: 400; line-height: 1.5; }
         .auth-field input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #dbe6e3; border-radius: 4px; outline: none; color: #15313a; background: #fbfdfc; font: inherit; font-size: 13px; }
         .auth-field input:focus { border-color: #147d70; box-shadow: 0 0 0 3px rgba(20,125,112,.12); }
         .auth-field input::placeholder { color: #9aabaa; }
