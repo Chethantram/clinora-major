@@ -18,8 +18,8 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
     },
   });
 
+  const text = await res.text();
   if (!res.ok) {
-    const text = await res.text();
     let message = text;
     try {
       const payload = JSON.parse(text) as { error?: string; message?: string };
@@ -29,6 +29,11 @@ export async function fetchApi<T>(path: string, init?: RequestInit): Promise<T> 
     }
     throw new Error(message || `Request failed: ${res.status}`);
   }
-  return res.json() as Promise<T>;
+  if (!text.trim()) return {} as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error("The server returned an incomplete response. Please retry the upload.");
+  }
 }
 

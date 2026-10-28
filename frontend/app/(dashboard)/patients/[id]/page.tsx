@@ -50,6 +50,7 @@ type PatientCase = {
     plan?: string;
     symptoms?: string[];
   }>;
+  bodyIssues?: Array<{ label: string; x: number; y: number; type?: string }>;
   allergies?: string[];
   overdueTests?: Array<{ test?: string; name?: string; reason?: string }>;
   lastVisit?: string | null;
@@ -81,6 +82,15 @@ type LabTrendResponse = {
 };
 
 type BodyRegion = "head" | "chest" | "heart" | "abdomen" | "kidney" | "legs";
+type BodyDot = {
+  id: string;
+  region: BodyRegion;
+  text: string;
+  type: "critical" | "monitoring" | "stable";
+  x?: number;
+  y?: number;
+  label?: string;
+};
 
 const statusConfig = {
   stable: { label: "Stable", dot: "#10b981", bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
@@ -102,6 +112,30 @@ function normalizeStatus(status?: string) {
   if (s.includes("critical") || s.includes("high")) return "critical" as const;
   if (s.includes("monitor") || s.includes("medium")) return "monitoring" as const;
   return "stable" as const;
+}
+
+function visitTimestamp(value?: string | null) {
+  if (!value) return Number.NaN;
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(Number(value.slice(0, 4)), Number(value.slice(5, 7)) - 1, Number(value.slice(8, 10)))
+    : new Date(value);
+  return date.getTime();
+}
+
+function formatDateSafe(value?: string | null) {
+  const timestamp = visitTimestamp(value);
+  if (!Number.isFinite(timestamp)) return "Date unavailable";
+  return new Intl.DateTimeFormat("en", { day: "numeric", month: "short", year: "numeric" }).format(timestamp);
+}
+
+function escapeReportHtml(value: unknown) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[character] || character);
 }
 
 function parseRange(range?: string) {
@@ -147,10 +181,11 @@ export default function PatientDetailPage() {
   const [overdueTests, setOverdueTests] = useState<Array<{ test?: string; reason?: string }>>([]);
   const [ragSummaryPoints, setRagSummaryPoints] = useState<string[]>([]);
   const [labTrends, setLabTrends] = useState<Record<string, LabTrendResponse>>({});
-  const [hoverDot, setHoverDot] = useState<{ id: string; text: string; region: BodyRegion } | null>(null);
+  const [hoverDot, setHoverDot] = useState<{ id: string; text: string; region: BodyRegion; x?: number; y?: number; label?: string } | null>(null);
   const [bodyMapLoading, setBodyMapLoading] = useState(true);
   const [loggedDoctorName, setLoggedDoctorName] = useState("");
   const [loggedDoctorDept, setLoggedDoctorDept] = useState("");
+    const [reportMessage, setReportMessage] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -227,6 +262,11 @@ export default function PatientDetailPage() {
 
   const meds = useMemo(() => patient?.medications || [], [patient]);
   const visits = useMemo(() => patient?.visits || [], [patient]);
+  const latestVisit = useMemo(() => visits
+    .filter((visit) => Number.isFinite(visitTimestamp(visit.date)))
+    .reduce<(typeof visits)[number] | null>((latest, visit) => (
+      !latest || visitTimestamp(visit.date) > visitTimestamp(latest.date) ? visit : latest
+    ), null), [visits]);
   const statusKey = normalizeStatus(patient?.status);
   const status = statusConfig[statusKey];
   const diagnosis = useMemo(() => {
@@ -235,7 +275,18 @@ export default function PatientDetailPage() {
     return patient?.diagnoses || [];
   }, [patient]);
 
-  const bodyDots = useMemo(() => {
+  const bodyDots = useMemo<BodyDot[]>(() => {
+    if (patient?.bodyIssues?.length) {
+      return patient.bodyIssues.slice(0, 8).map((issue, idx) => ({
+        id: `body-issue-${idx}`,
+        region: "chest" as BodyRegion,
+        text: issue.label,
+        type: normalizeStatus(issue.type),
+        x: issue.x,
+        y: issue.y,
+        label: "Selected location",
+      }));
+    }
     return flags.slice(0, 8).map((f, idx) => {
       const region = mapFlagToBodyRegion(f.flag);
       return {
@@ -245,7 +296,7 @@ export default function PatientDetailPage() {
         type: normalizeStatus(f.type),
       };
     });
-  }, [flags]);
+  }, [patient?.bodyIssues, flags]);
 
   const pastIssues = useMemo(() => {
     const issueSet = new Set<string>();
@@ -265,6 +316,26 @@ export default function PatientDetailPage() {
       .filter((v) => isDepartmentMatch(loggedDoctorDept, String(v.department || "")))
       .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   }, [visits, loggedDoctorDept]);
+
+  function handleGenerateReport() {
+    if (!patient) return;
+    const reportWindow = window.open("", "_blank", "width=900,height=720");
+    if (!reportWindow) {
+      setReportMessage("Allow pop-ups for this site to generate the patient report.");
+      return;
+    }
+    setReportMessage("");
+    reportWindow.opener = null;
+    const safeVisits = [...visits].sort((first, second) => visitTimestamp(second.date) - visitTimestamp(first.date));
+    const rows = safeVisits.map((visit) => `<tr><td>${escapeReportHtml(formatDateSafe(visit.date))}</td><td>${escapeReportHtml(visit.doctor || "Not recorded")}</td><td>${escapeReportHtml(visit.department || "Not recorded")}</td><td>${escapeReportHtml(visit.chiefComplaint || "Not recorded")}</td><td>${escapeReportHtml(visit.clinicalNote || "Not recorded")}</td></tr>`).join("");
+    const medications = meds.length
+      ? meds.map((medication) => `<li>${escapeReportHtml(medication.name)}${medication.dose ? `, ${escapeReportHtml(medication.dose)}` : ""}${medication.frequency ? ` (${escapeReportHtml(medication.frequency)})` : ""}</li>`).join("")
+      : "<li>No medication records</li>";
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Patient report - ${escapeReportHtml(patient.name)}</title><style>body{font:14px/1.5 Arial,sans-serif;color:#15313a;max-width:1000px;margin:36px auto;padding:0 24px}h1{font:500 26px Georgia,serif;margin:0}h2{font-size:15px;margin:24px 0 8px}p{margin:4px 0;color:#52696c}.meta{padding:14px 0;border-bottom:1px solid #dbe6e3}table{width:100%;border-collapse:collapse;font-size:12px}th,td{text-align:left;vertical-align:top;padding:8px;border-bottom:1px solid #e5eeea}th{background:#f3f8f5}footer{margin-top:28px;padding-top:12px;border-top:1px solid #dbe6e3;color:#718487;font-size:11px}@media print{body{margin:0 auto;padding:0 12px}}</style></head><body><header class="meta"><h1>${escapeReportHtml(patient.name)}</h1><p>${escapeReportHtml(patient.id)} · ${escapeReportHtml(patient.age ?? "Age not recorded")} years · ${escapeReportHtml(patient.gender || "Gender not recorded")}</p><p>Generated ${escapeReportHtml(new Date().toLocaleDateString())}</p></header><section><h2>Diagnoses</h2><p>${escapeReportHtml(diagnosis.join(", ") || "No diagnosis recorded")}</p></section><section><h2>Allergies and cautions</h2><p>${escapeReportHtml(patient.allergies?.join(", ") || "None recorded")}</p></section><section><h2>Medications</h2><ul>${medications}</ul></section><section><h2>Most recent visit</h2><p>${escapeReportHtml(formatDateSafe(latestVisit?.date))}${latestVisit?.doctor ? ` · ${escapeReportHtml(latestVisit.doctor)}` : ""}${latestVisit?.department ? ` · ${escapeReportHtml(latestVisit.department)}` : ""}</p><p>${escapeReportHtml(latestVisit?.clinicalNote || latestVisit?.chiefComplaint || "No visit notes recorded")}</p></section><section><h2>Visit history</h2><table><thead><tr><th>Date</th><th>Clinician</th><th>Department</th><th>Reason</th><th>Notes</th></tr></thead><tbody>${rows || "<tr><td colspan=\"5\">No visit records</td></tr>"}</tbody></table></section><footer>Confidential clinical report. Verify against the source record before clinical action.</footer><script>window.onload=()=>{window.focus();window.print()}</script></body></html>`;
+    reportWindow.document.open();
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+  }
 
   if (loading) {
     return (
@@ -337,7 +408,7 @@ export default function PatientDetailPage() {
           background:
             radial-gradient(circle at 50% -10%, rgba(148,163,184,0.16), transparent 36%),
             linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
-          padding: 12px;
+          padding: 0;
           overflow: hidden;
         }
         .body-map::before {
@@ -482,9 +553,10 @@ export default function PatientDetailPage() {
               <button className="pd-action-btn"><Phone style={{ width: 14, height: 14 }} /> Call</button>
               <button className="pd-action-btn"><Mail style={{ width: 14, height: 14 }} /> Email</button>
               <button className="pd-action-btn"><Share2 style={{ width: 14, height: 14 }} /> Refer</button>
-              <button className="pd-action-btn primary"><FileText style={{ width: 14, height: 14 }} /> Generate Report</button>
+              <button className="pd-action-btn primary" type="button" onClick={handleGenerateReport}><FileText style={{ width: 14, height: 14 }} /> Generate Report</button>
             </div>
           </div>
+          {reportMessage && <p role="status" style={{ marginTop: 12, color: "#a84936", fontSize: 12 }}>{reportMessage}</p>}
 
           {!!patient.allergies?.length && (
             <div style={{ marginTop: 18, display: "flex", alignItems: "flex-start", gap: 10, background: "#fff8f8", border: "1px solid #fecaca", borderLeft: "3px solid #ef4444", borderRadius: 7, padding: "11px 14px" }}>
@@ -560,9 +632,9 @@ export default function PatientDetailPage() {
 
                 <p style={{ margin: "0 0 6px", fontWeight: 600, color: "#0f172a" }}>Last Visit Notes:</p>
                 <ul style={{ margin: "0 0 12px 18px", padding: 0 }}>
-                  <li>{brief?.lastVisitSummary?.date || visits[visits.length - 1]?.date || "No date"}: {brief?.lastVisitSummary?.clinicalNote || visits[visits.length - 1]?.clinicalNote || "No notes"}</li>
-                  {(brief?.lastVisitSummary?.symptoms || visits[visits.length - 1]?.symptoms || []).length > 0 && (
-                    <li>Symptoms: {(brief?.lastVisitSummary?.symptoms || visits[visits.length - 1]?.symptoms || []).join(", ")}</li>
+                  <li>{brief?.lastVisitSummary?.date || latestVisit?.date || "No date"}: {brief?.lastVisitSummary?.clinicalNote || latestVisit?.clinicalNote || "No notes"}</li>
+                  {(brief?.lastVisitSummary?.symptoms || latestVisit?.symptoms || []).length > 0 && (
+                    <li>Symptoms: {(brief?.lastVisitSummary?.symptoms || latestVisit?.symptoms || []).join(", ")}</li>
                   )}
                 </ul>
 
@@ -826,7 +898,7 @@ export default function PatientDetailPage() {
               </div>
 
               <div className="body-map" style={{ height: 300 }}>
-                <svg viewBox="0 0 180 300" width="100%" height="100%" aria-label="Body map" style={{ position: "relative", zIndex: 2 }}>
+                <svg viewBox="0 0 180 300" width="100%" height="100%" aria-label="Body map" style={{ position: "absolute", inset: 0, zIndex: 2 }}>
                   <defs>
                     <linearGradient id="bodyGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#dbe3ef" />
@@ -854,16 +926,22 @@ export default function PatientDetailPage() {
                     <div
                       key={dot.id}
                       className="body-dot"
-                      style={{ top: pos.top, left: pos.left, background: color, color }}
-                      onMouseEnter={() => setHoverDot({ id: dot.id, text: dot.text, region: dot.region })}
+                      style={{ top: dot.y != null ? `${dot.y}%` : pos.top, left: dot.x != null ? `${dot.x}%` : pos.left, background: color, color }}
+                      title={`${dot.label || pos.label}: ${dot.text}`}
+                      aria-label={`${dot.label || pos.label}: ${dot.text}`}
+                      role="img"
+                      tabIndex={0}
+                      onMouseEnter={() => setHoverDot({ id: dot.id, text: dot.text, region: dot.region, x: dot.x, y: dot.y, label: dot.label })}
+                      onFocus={() => setHoverDot({ id: dot.id, text: dot.text, region: dot.region, x: dot.x, y: dot.y, label: dot.label })}
                       onMouseLeave={() => setHoverDot((prev) => (prev?.id === dot.id ? null : prev))}
+                      onBlur={() => setHoverDot((prev) => (prev?.id === dot.id ? null : prev))}
                     />
                   );
                 })}
 
                 {!bodyMapLoading && hoverDot && (
-                  <div className="body-tip" style={{ top: bodyRegionPosition[hoverDot.region].top, left: bodyRegionPosition[hoverDot.region].left }}>
-                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{bodyRegionPosition[hoverDot.region].label}</div>
+                  <div className="body-tip" style={{ top: hoverDot.y != null ? `${hoverDot.y}%` : bodyRegionPosition[hoverDot.region].top, left: hoverDot.x != null ? `${hoverDot.x}%` : bodyRegionPosition[hoverDot.region].left }}>
+                    <div style={{ fontWeight: 600, marginBottom: 4 }}>{hoverDot.label || bodyRegionPosition[hoverDot.region].label}</div>
                     {hoverDot.text}
                   </div>
                 )}
@@ -930,7 +1008,7 @@ export default function PatientDetailPage() {
                 { label: "Patient ID", value: patient.id },
                 { label: "Age", value: `${patient.age} years` },
                 { label: "Gender", value: patient.gender },
-                { label: "Last Visit", value: patient.lastVisit || (visits.length ? visits[visits.length - 1]?.date : "—") },
+                { label: "Last Visit", value: latestVisit?.date ? formatDateSafe(latestVisit.date) : "No visits yet" },
                 { label: "Status", value: status.label },
               ].map((row) => (
                 <div key={row.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>

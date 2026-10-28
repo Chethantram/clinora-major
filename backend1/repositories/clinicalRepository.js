@@ -13,6 +13,11 @@ function patientIdFilter(patientId) {
   return { patient_id: normalizePatientId(patientId) };
 }
 
+function dateTimestamp(value) {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 function normalizePatient(patient) {
   if (!patient) return null;
   const diagnosis = Array.isArray(patient.diagnosis)
@@ -20,7 +25,7 @@ function normalizePatient(patient) {
     : [...(patient.primaryDiagnosis || []), ...(patient.secondaryDiagnosis || [])];
   return {
     _id: patient._id || null,
-    patient_id: patient.patient_id || patient.id,
+    patient_id: normalizePatientId(patient.patient_id || patient.id),
     name: patient.name || 'Unknown',
     age: patient.age ?? null,
     gender: patient.gender || 'Unknown',
@@ -30,6 +35,7 @@ function normalizePatient(patient) {
     diagnosis,
     allergies: patient.allergies || [],
     status: patient.status || null,
+    bodyIssues: Array.isArray(patient.bodyIssues) ? patient.bodyIssues : [],
     lastVisit: patient.lastVisit || null,
     overdueTests: patient.overdueTests || [],
     address: patient.address || null,
@@ -40,7 +46,7 @@ function normalizePatient(patient) {
 function normalizeVisit(visit) {
   return {
     visit_id: visit.visit_id || null,
-    patient_id: visit.patient_id,
+    patient_id: normalizePatientId(visit.patient_id),
     date: visit.date || null,
     doctor: visit.doctor || '',
     department: visit.department || '',
@@ -182,8 +188,11 @@ async function listPatients() {
   ]);
   const lastVisitByPatient = visits.reduce((result, visit) => {
     if (!visit.patient_id) return result;
-    if (!result[visit.patient_id] || new Date(visit.date || 0) > new Date(result[visit.patient_id])) {
-      result[visit.patient_id] = visit.date;
+    const patientId = normalizePatientId(visit.patient_id);
+    const nextTimestamp = dateTimestamp(visit.date);
+    const currentTimestamp = dateTimestamp(result[patientId]);
+    if (nextTimestamp !== null && (currentTimestamp === null || nextTimestamp > currentTimestamp)) {
+      result[patientId] = visit.date;
     }
     return result;
   }, {});
@@ -199,7 +208,7 @@ async function listPatients() {
     return {
       ...normalized,
       status: normalized.status || (severity === 'high' ? 'critical' : severity === 'medium' ? 'monitoring' : 'stable'),
-      lastVisit: normalized.lastVisit || lastVisitByPatient[normalized.patient_id] || null,
+      lastVisit: lastVisitByPatient[normalized.patient_id] || null,
     };
   });
 }
@@ -247,6 +256,7 @@ async function createPatient(input) {
       blood_group: input.blood_group,
       diagnosis: input.diagnosis,
       allergies: input.allergies,
+      bodyIssues: input.bodyIssues || [],
       status: 'stable',
       lastVisit: null,
       createdAt: new Date(),
@@ -413,7 +423,9 @@ async function getDashboardData() {
   for (const visit of visits) {
     if (!visit.patient_id || !visit.date) continue;
     const current = lastVisitByPatient.get(visit.patient_id);
-    if (!current || new Date(visit.date) > new Date(current)) {
+    const nextTimestamp = dateTimestamp(visit.date);
+    const currentTimestamp = dateTimestamp(current);
+    if (nextTimestamp !== null && (currentTimestamp === null || nextTimestamp > currentTimestamp)) {
       lastVisitByPatient.set(visit.patient_id, visit.date);
     }
   }
@@ -432,7 +444,7 @@ async function getDashboardData() {
     return {
       ...patient,
       status: patient.status || (severity === 'high' ? 'critical' : severity === 'medium' ? 'monitoring' : 'stable'),
-      lastVisit: patient.lastVisit || lastVisitByPatient.get(patient.patient_id) || null,
+      lastVisit: lastVisitByPatient.get(patient.patient_id) || null,
     };
   });
 

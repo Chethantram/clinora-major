@@ -1,5 +1,6 @@
 const { LocalIndex } = require('vectra');
 const path = require('path');
+const fs = require('fs');
 const Anthropic = require('@anthropic-ai/sdk');
 
 const INDEX_PATH = path.join(__dirname, '../data/vectra_index');
@@ -21,6 +22,18 @@ async function getEmbedding(text) {
 }
 
 async function initIndex() {
+  const indexFile = path.join(INDEX_PATH, 'index.json');
+  if (fs.existsSync(indexFile)) {
+    let rebuild = false;
+    try {
+      const contents = fs.readFileSync(indexFile, 'utf8').trim();
+      if (!contents) rebuild = true;
+      else JSON.parse(contents);
+    } catch {
+      rebuild = true;
+    }
+    if (rebuild) fs.unlinkSync(indexFile);
+  }
   index = new LocalIndex(INDEX_PATH);
   if (!await index.isIndexCreated()) {
     await index.createIndex();

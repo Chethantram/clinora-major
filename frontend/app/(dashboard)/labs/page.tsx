@@ -10,6 +10,7 @@ import {
   Beaker,
   Check,
   Download,
+  FileUp,
   FlaskConical,
   RefreshCw,
   TestTube2,
@@ -127,6 +128,10 @@ export default function LabsPage() {
   const [orderMessage, setOrderMessage] = useState("");
   const [orderActionId, setOrderActionId] = useState<string | null>(null);
   const [orderActionError, setOrderActionError] = useState("");
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importMessage, setImportMessage] = useState("");
+  const [importing, setImporting] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -255,6 +260,35 @@ export default function LabsPage() {
     }
   }
 
+  async function importDocument() {
+    if (!selectedPatient || !importFile) {
+      setImportMessage("Choose a patient and a document first.");
+      return;
+    }
+    setImporting(true);
+    setImportMessage("");
+    const formData = new FormData();
+    formData.append("document", importFile);
+    formData.append("patientId", selectedPatient);
+    formData.append("autoIngest", "true");
+    try {
+      const result = await fetchApi<{ success?: boolean; parser?: string; ingestion?: { success?: boolean; error?: string }; error?: string }>("/api/agent/ocr", {
+        method: "POST",
+        body: formData,
+      });
+      if (!result.success || result.ingestion?.success === false) {
+        throw new Error(result.ingestion?.error || result.error || "The document could not be imported.");
+      }
+      setImportMessage(`Document processed${result.parser ? ` with ${result.parser.replaceAll("_", " ")}` : ""}. Lab results have been added to this patient.`);
+      setImportFile(null);
+      await loadData();
+    } catch (error) {
+      setImportMessage(error instanceof Error ? error.message : "The document could not be imported.");
+    } finally {
+      setImporting(false);
+    }
+  }
+
   return (
     <main className="labs-page">
       <header className="labs-heading">
@@ -265,6 +299,7 @@ export default function LabsPage() {
         </div>
         <div className="labs-heading-actions">
           <button className="labs-secondary-button" type="button" onClick={exportResults} disabled={loading || patientLabs.length === 0}><Download size={15} /> Export</button>
+          <button className="labs-secondary-button" type="button" onClick={() => { setImportMessage(""); setImportFile(null); setIsImportOpen(true); }} disabled={patients.length === 0}><FileUp size={15} /> Import document</button>
           <button className="labs-primary-button" type="button" onClick={() => { setOrderMessage(""); setOrderTest(selectedTest || testsToOrder[0] || ""); setIsOrderOpen(true); }} disabled={patients.length === 0}><Beaker size={15} /> Order test</button>
           <button className="labs-icon-button" type="button" onClick={() => void loadData()} disabled={loading} aria-label="Refresh lab results" title="Refresh lab results"><RefreshCw size={15} className={loading ? "labs-spin" : ""} /></button>
         </div>
@@ -376,6 +411,22 @@ export default function LabsPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={isImportOpen} onOpenChange={(open) => { setIsImportOpen(open); if (!open && !importing) { setImportFile(null); setImportMessage(""); } }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>Import lab document</DialogTitle><DialogDescription>Upload a scanned report, PDF, image, or text file. Extracted results will be added to the selected patient record for review.</DialogDescription></DialogHeader>
+          <div className="labs-order-form">
+            <label>Patient<select value={selectedPatient} onChange={(event) => setSelectedPatient(event.target.value)}>{patients.map((item) => <option key={item.patient_id} value={item.patient_id}>{item.name} ({item.patient_id})</option>)}</select></label>
+            <label>Document<input type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt" onChange={(event) => setImportFile(event.target.files?.[0] || null)} /></label>
+            <p className="labs-import-note">The extractor keeps the test name, value, unit, reference range, status, and report date when they are present.</p>
+            {importMessage && <p className="labs-order-message" role="status">{importMessage}</p>}
+          </div>
+          <DialogFooter>
+            <button type="button" className="labs-secondary-button" onClick={() => setIsImportOpen(false)} disabled={importing}>Close</button>
+            <button type="button" className="labs-primary-button" onClick={() => void importDocument()} disabled={importing || !selectedPatient || !importFile}><FileUp size={14} /> {importing ? "Extracting..." : "Extract lab results"}</button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <style jsx global>{`
         .labs-page { --labs-ink:#15313a; --labs-muted:#718487; --labs-line:#dbe6e3; --labs-green:#147d70; max-width:1440px; margin:0 auto; padding:8px 0 38px; color:var(--labs-ink); }
         .labs-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; margin-bottom:23px; }.labs-eyebrow { margin:0 0 9px; color:#648080; font-size:9px; font-weight:700; letter-spacing:1px; }.labs-eyebrow span { padding:0 5px; color:#a4b3b0; }.labs-heading h1 { margin:0; font:400 31px/1.15 Georgia,serif; }.labs-subtitle { margin:8px 0 0; color:var(--labs-muted); font-size:12px; }.labs-heading-actions { display:flex; align-items:center; gap:7px; }
@@ -389,7 +440,7 @@ export default function LabsPage() {
         .labs-recent-header { margin-bottom:12px; }.labs-recent-header a { color:var(--labs-green); font-size:9px; font-weight:650; text-decoration:none; white-space:nowrap; }.labs-recent-header a:hover { text-decoration:underline; }.labs-recent-list { display:grid; }.labs-result-row { display:flex; width:100%; min-width:0; align-items:center; gap:8px; padding:9px 4px; border:0; border-top:1px solid #edf2f0; background:#fff; text-align:left; cursor:pointer; }.labs-result-row:hover,.labs-result-row.is-selected { background:#f7fbf9; }.labs-result-icon { display:grid; width:28px; height:28px; flex:0 0 28px; place-items:center; color:#537a6c; background:#e8f1ed; }.labs-result-icon.is-abnormal { color:#a84936; background:#fbefeb; }.labs-result-main { min-width:0; flex:1; }.labs-result-main b,.labs-result-main small,.labs-result-value b,.labs-result-value em { display:block; }.labs-result-main b { overflow:hidden; color:#435c5e; font-size:9px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }.labs-result-main small { margin-top:4px; color:#8a9b99; font-size:8px; }.labs-result-value { flex:0 0 auto; text-align:right; }.labs-result-value b { color:#29464a; font-size:10px; font-weight:650; }.labs-result-value b small { display:inline; color:#829593; font-size:8px; font-weight:400; }.labs-result-value em { margin-top:3px; color:#537a6c; font-size:8px; font-style:normal; }.labs-result-value em.is-abnormal { color:#a84936; }.labs-no-recent { margin:18px 0; color:#829593; font-size:10px; }
         .labs-orders-panel .labs-panel-header { margin-bottom:12px; }.labs-pending-count { padding:4px 7px; color:#916b2c; background:#f7f0df; font-size:9px; font-weight:650; }.labs-orders-list { display:grid; }.labs-order-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:11px 2px; border-top:1px solid #edf2f0; }.labs-order-details { display:grid; min-width:0; gap:4px; }.labs-order-details b { color:#29464a; font-size:10px; }.labs-order-details span,.labs-order-details small { color:#829593; font-size:9px; overflow-wrap:anywhere; }.labs-order-actions { display:flex; flex:0 0 auto; gap:6px; }.labs-order-actions button { display:inline-flex; min-height:29px; align-items:center; justify-content:center; gap:4px; padding:0 8px; border:1px solid var(--labs-line); border-radius:2px; background:#fff; font:inherit; font-size:9px; cursor:pointer; }.labs-order-actions button:disabled { opacity:.5; cursor:wait; }.labs-approve { border-color:#147d70 !important; color:#fff; background:#147d70 !important; }.labs-reject { color:#a84936; }.labs-order-status { font-size:9px; font-weight:650; }.labs-order-status.approved { color:#537a6c; }.labs-order-status.rejected { color:#a84936; }.labs-orders-empty { margin:0; padding:12px 0 3px; color:#829593; font-size:10px; }.labs-orders-error { margin:0 0 8px; }
         .labs-empty { display:grid; min-height:250px; align-content:center; justify-items:center; padding:22px; text-align:center; }.labs-empty > span { display:grid; width:42px; height:42px; place-items:center; color:var(--labs-green); background:#eaf4f0; }.labs-empty h3 { margin:12px 0 0; color:#29464a; font-size:12px; font-weight:650; }.labs-empty p { margin:6px 0 0; color:#829593; font-size:10px; }
-        .labs-order-form { display:grid; gap:12px; padding:8px 0; }.labs-order-form label { display:grid; gap:6px; color:#52696c; font-size:10px; font-weight:650; }.labs-order-form input,.labs-order-form select,.labs-order-form textarea { width:100%; min-height:36px; padding:8px 9px; border:1px solid var(--labs-line); border-radius:2px; color:#29464a; background:#fff; font:inherit; font-size:11px; }.labs-order-form textarea { resize:vertical; }.labs-order-message { margin:0; color:var(--labs-green); font-size:10px; }
+        .labs-order-form { display:grid; gap:12px; padding:8px 0; }.labs-order-form label { display:grid; gap:6px; color:#52696c; font-size:10px; font-weight:650; }.labs-order-form input,.labs-order-form select,.labs-order-form textarea { width:100%; min-height:36px; padding:8px 9px; border:1px solid var(--labs-line); border-radius:2px; color:#29464a; background:#fff; font:inherit; font-size:11px; }.labs-order-form textarea { resize:vertical; }.labs-order-message { margin:0; color:var(--labs-green); font-size:10px; }.labs-import-note { margin:0; color:#829593; font-size:10px; line-height:1.5; }
         @media (max-width:900px) { .labs-workspace { grid-template-columns:minmax(0,1fr) minmax(250px,300px); }.labs-trend-panel,.labs-recent-panel,.labs-orders-panel { padding:14px; } }
         @media (max-width:760px) { .labs-heading { align-items:flex-start; }.labs-summary { grid-template-columns:repeat(2,minmax(0,1fr)); }.labs-summary-item:nth-child(3) { border-left:0; border-top:1px solid var(--labs-line); }.labs-summary-item:nth-child(4) { border-top:1px solid var(--labs-line); }.labs-workspace { grid-template-columns:1fr; }.labs-recent-panel { order:2; }.labs-trend-panel { order:1; } }
         @media (max-width:480px) { .labs-page { padding-top:0; }.labs-heading { flex-direction:column; align-items:stretch; }.labs-heading h1 { font-size:28px; }.labs-heading-actions { align-self:flex-start; }.labs-summary-item { min-height:72px; padding:12px; }.labs-summary-value { font-size:20px; }.labs-panel-header { flex-direction:column; }.labs-select { width:100%; }.labs-current-stats { grid-template-columns:1fr; }.labs-chart { height:205px; }.labs-order-row { align-items:flex-start; flex-direction:column; }.labs-order-actions { align-self:flex-end; } }

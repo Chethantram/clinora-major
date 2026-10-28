@@ -39,6 +39,15 @@ const LAB_TEST_ORDERS_FILE = path.join(DATA_DIR, 'lab_test_orders.json');
 const PRESCRIPTIONS_FILE = path.join(DATA_DIR, 'prescriptions.json');
 const DATASET_DIR = process.env.DATASET_DIR ? path.resolve(process.env.DATASET_DIR) : null;
 
+function normalizePatientId(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function validDateTimestamp(value) {
+  const timestamp = value ? new Date(value).getTime() : Number.NaN;
+  return Number.isFinite(timestamp) ? timestamp : null;
+}
+
 function readJsonIfExists(baseDir, fileName) {
   const fullPath = path.join(baseDir, fileName);
   if (!fs.existsSync(fullPath)) return null;
@@ -204,7 +213,7 @@ async function dashboardDataFromMongo() {
     ]);
 
     const visits = rawVisits.map((v) => ({
-      patient_id: v.patient_id || null,
+      patient_id: normalizePatientId(v.patient_id) || null,
       date: v.date || null,
       doctor: v.doctor || '',
       department: v.department || '',
@@ -269,10 +278,11 @@ async function dashboardDataFromMongo() {
 
     const latestVisitByPatient = visits.reduce((acc, v) => {
       if (!v.patient_id) return acc;
-      const current = acc[v.patient_id];
-      const nextTs = new Date(v.date || 0).getTime();
-      const curTs = new Date(current || 0).getTime();
-      if (!current || nextTs > curTs) acc[v.patient_id] = v.date;
+      const patientId = normalizePatientId(v.patient_id);
+      const current = acc[patientId];
+      const nextTs = validDateTimestamp(v.date);
+      const curTs = validDateTimestamp(current);
+      if (nextTs !== null && (curTs === null || nextTs > curTs)) acc[patientId] = v.date;
       return acc;
     }, {});
 
@@ -285,7 +295,7 @@ async function dashboardDataFromMongo() {
     }, {});
 
     const patients = rawPatients.map((p) => {
-      const patientId = p.patient_id || p.id;
+      const patientId = normalizePatientId(p.patient_id || p.id);
       const derivedStatus = maxSeverityByPatient[patientId] === 'high'
         ? 'critical'
         : maxSeverityByPatient[patientId] === 'medium'
@@ -308,7 +318,7 @@ async function dashboardDataFromMongo() {
         smoking: p.smoking || null,
         alcohol: p.alcohol || null,
         status: p.status || derivedStatus,
-        lastVisit: p.lastVisit || latestVisitByPatient[patientId] || null,
+        lastVisit: latestVisitByPatient[patientId] || null,
       };
     });
 
@@ -514,7 +524,11 @@ function buildBriefFromCase(patient, patientId) {
   const safeFlags = Array.isArray(patient?.clinicalFlags) ? patient.clinicalFlags : [];
   const safeLabs = patient?.labResults || {};
   const safeMeds = Array.isArray(patient?.medications) ? patient.medications : [];
-  const lastVisit = safeVisits.length ? safeVisits[safeVisits.length - 1] : null;
+  const lastVisit = safeVisits.reduce((latest, visit) => {
+    if (!visit.date) return latest;
+    if (!latest || new Date(visit.date).getTime() > new Date(latest.date).getTime()) return visit;
+    return latest;
+  }, null);
   const recentLabs = {};
   Object.entries(safeLabs).forEach(([test, values]) => {
     recentLabs[test] = (values || []).slice(-3);
@@ -541,6 +555,11 @@ function buildBriefFromCase(patient, patientId) {
 
 function bundleToCase(bundle) {
   const diagnosis = bundle.patient.diagnosis || [];
+  const latestVisit = bundle.visits.reduce((latest, visit) => {
+    if (!visit.date) return latest;
+    if (!latest || new Date(visit.date).getTime() > new Date(latest.date).getTime()) return visit;
+    return latest;
+  }, null);
   const labResults = bundle.labs.reduce((result, lab) => {
     if (!result[lab.test]) result[lab.test] = [];
     result[lab.test].push({
@@ -555,6 +574,7 @@ function bundleToCase(bundle) {
   return {
     id: bundle.patient.patient_id,
     ...bundle.patient,
+    lastVisit: latestVisit?.date || bundle.patient.lastVisit || null,
     primaryDiagnosis: diagnosis.slice(0, 2),
     secondaryDiagnosis: diagnosis.slice(2),
     medications: bundle.medications.map((medication) => ({
@@ -983,6 +1003,7 @@ router.post('/agent/query', async (req, res) => {
     const result = await runAnalysisAgent(normalizedQuery, patientId, apiKey, model, (trace) => traces.push(trace));
     return res.json({ ...result, traces, fallback: 'analysis-agent' });
   } catch (e) {
+    fs.unlink(uploaded.path, () => {});
     return res.status(500).json({ error: e.message });
   }
 });
@@ -1170,7 +1191,13 @@ router.post('/agent/ocr', uploadAny.any(), async (req, res) => {
 
   try {
     const { processUploadedDocument } = require('../agents/ocrAgent');
-    const result = await processUploadedDocument(uploaded.path, req.body.apiKey, req.body.model);
+    const result = await processUploadedDocument(
+      uploaded.path,
+      req.body.apiKey,
+      req.body.model,
+      uploaded.originalname,
+      uploaded.mimetype
+    );
     blockchain.addBlock('OCR_PROCESSING', 'SYSTEM', req.body.patientId || 'UNKNOWN', `OCR processing complete - ${result.success ? 'success' : 'failed'}`);
 
     if (result.success && req.body.patientId && req.body.autoIngest === 'true') {
@@ -1182,6 +1209,7 @@ router.post('/agent/ocr', uploadAny.any(), async (req, res) => {
     fs.unlink(uploaded.path, () => {});
     return res.json(result);
   } catch (e) {
+    fs.unlink(uploaded.path, () => {});
     return res.status(500).json({ error: e.message });
   }
 });

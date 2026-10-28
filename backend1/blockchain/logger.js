@@ -12,7 +12,7 @@ function init(socketIo) {
     action: 'CHAIN_INITIALIZED',
     actorId: 'SYSTEM',
     patientId: null,
-    details: 'Kathir Memorial Hospital — Patient Intelligence Blockchain Audit Ledger initialized',
+    details: 'Clinora Hospital — Patient Intelligence Blockchain Audit Ledger initialized',
     previousHash: '0000000000000000',
     hash: crypto.createHash('sha256').update('genesis').digest('hex')
   });
